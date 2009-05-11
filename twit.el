@@ -580,7 +580,8 @@ Emacs' url package will prompt for authentication info if required.
 Note that this parses the entire HTTP request as an xml fragment
 and not the response.  THIS BEHAVIOR IS SUBJECT TO CHANGE!"
   (let ((result nil)
-		(url-request-method method))
+		(url-request-method method)
+        (url-show-status nil))
     (save-window-excursion
       (set-buffer (url-retrieve-synchronously url))
       (goto-char (point-min))
