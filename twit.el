@@ -471,6 +471,7 @@ search."
     ("d" . twit-direct)
     ("n" . twit-next-tweet)
     ("p" . twit-previous-tweet)
+    ("r" . twit-post-reply)
 	("h" . twit-mode-help)
 	("?" . twit-mode-help)))
 
@@ -713,10 +714,16 @@ This will give us a Guarantee that our posting atually did work."
   (kill-buffer (current-buffer)))
 
 ;;* post status
-(defun twit-post-function (url post)
-  (let ((url-request-method "POST")
+(defun twit-post-function (url post &optional reply-id)
+  (let* ((url-request-method "POST")
         (url-show-status nil)
-	(url-request-data (concat "source=twit.el&status=" (url-hexify-string post)))
+        (url-request-data (format "source=twit.el&status=%s"
+                                  (url-hexify-string post)))
+        (url-request-data (concat url-request-data
+                                  (if reply-id
+                                      (format "&in_reply_to_status_id=%d"
+                                              reply-id)
+                                      "")))
         ;; these headers don't actually do anything (yet?) -- the 
         ;; source parameter above is what counts
         (url-request-extra-headers twit-request-headers))
@@ -855,7 +862,7 @@ It is in the format of (timestamp user-id message) ")
 		 (timestamp (xml-first-childs-value tweet 'created_at))
 		 (message (xml-substitute-special (xml-first-childs-value tweet 'text)))
 		 (src-info (xml-first-childs-value tweet 'source))
-         (tweet-id (xml-first-childs-value tweet 'id))
+         (tweet-id (string-to-number (xml-first-childs-value tweet 'id)))
 		 
 		 (overlay-start 0)
 		 (overlay-end 0))
@@ -900,7 +907,8 @@ It is in the format of (timestamp user-id message) ")
              '((face . "twit-info-face")) "" 'right))
 		  (setq overlay-end (point))
           (set-text-properties overlay-start overlay-end
-                               (list 'tweet-id tweet-id))
+                               (list 'tweet-id tweet-id
+                                     'user-id user-id))
 		  (let ((o (make-overlay overlay-start overlay-end)))
 			(overlay-put o 'face (if (= 0 (% times-through 2))
 									 "twit-zebra-1-face"
@@ -1143,27 +1151,16 @@ specific author that hte cursor is nearest to.
 		(error twit-too-long-msg)
       (twit-post-function twit-update-url post))))
 
-(defun twit-post-reply (prefix)
-  "Reply to a status on twitter.com.
-Prompt the first time for password and username \(unless
-`twit-user' and/or `twit-pass' is set\) and for the text of the
-post; thereafter just for post text.  Posts must be <= 140 chars
-long.
-
-A prefix argument will prompt you for your post in reply to a
-specific author that hte cursor is nearest to.
-"
-  (interactive "P")
-  (let* ((reply-to (when prefix 
-                     (twit-grab-author-of-tweet)))
-         (post (twit-query-for-post (if reply-to
-                                        (concat "Reply to " reply-to)
-                                      "Post") 
-                                    (when reply-to
-                                      (concat "@" reply-to " ")))))
+(defun twit-post-reply ()
+  "Reply to a status on twitter.com."
+  (interactive)
+  (let* ((reply-to (get-text-property (point) 'user-id))
+         (parent-id (get-text-property (point) 'tweet-id))
+         (post (twit-query-for-post (concat "Reply to " reply-to)
+               (concat "@" reply-to " "))))
     (if (> (length post) 140)
 		(error twit-too-long-msg)
-      (twit-post-function twit-update-url post))))
+      (twit-post-function twit-update-url post parent-id))))
 
 ;;* post interactive
 ;;;###autoload
