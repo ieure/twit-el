@@ -468,8 +468,8 @@ search."
 	("f" . twit-list-followers)
 	("p" . twit-post)
     ("d" . twit-direct)
-    ("n" . next-line)
-    ("p" . previous-line)
+    ("n" . twit-next-tweet)
+    ("p" . twit-previous-tweet)
 	("h" . twit-mode-help)
 	("?" . twit-mode-help)))
 
@@ -791,6 +791,20 @@ It is in the format of (timestamp user-id message) ")
 		"Return the value of the first child of some sxml. "
 		(car (xml-node-children (xml-first-child node addr)))))
 
+(defun twit-next-tweet (&optional arg)
+  "Move forward to the next tweet"
+  (interactive "p")
+  (mapc (lambda (n)
+          (goto-char (next-single-property-change (point) 'tweet-id)))
+        (number-sequence 1 (or arg 1))))
+
+(defun twit-previous-tweet (&optional arg)
+  "Move backward to the previous tweet"
+  (interactive "p")
+  (mapc (lambda (n)
+          (goto-char (previous-single-property-change (point) 'tweet-id)))
+        (number-sequence 1 (or arg 1))))
+
 ;;; xml parsing is a little hacky and needs work.
 ;;* tweets write memoryleak last-tweet
 (defun twit-write-recent-tweets (xml-data) 
@@ -838,6 +852,7 @@ It is in the format of (timestamp user-id message) ")
 		 (timestamp (xml-first-childs-value tweet 'created_at))
 		 (message (xml-substitute-special (xml-first-childs-value tweet 'text)))
 		 (src-info (xml-first-childs-value tweet 'source))
+         (tweet-id (xml-first-childs-value tweet 'id))
 		 
 		 (overlay-start 0)
 		 (overlay-end 0))
@@ -881,6 +896,8 @@ It is in the format of (timestamp user-id message) ")
                      "\n")
              '((face . "twit-info-face")) "" 'right))
 		  (setq overlay-end (point))
+          (set-text-properties overlay-start overlay-end
+                               (list 'tweet-id tweet-id))
 		  (let ((o (make-overlay overlay-start overlay-end)))
 			(overlay-put o 'face (if (= 0 (% times-through 2))
 									 "twit-zebra-1-face"
