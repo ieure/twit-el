@@ -250,8 +250,91 @@
 ;;; Variables
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defvar twit-status-mode-map (make-sparse-keymap))
-(defvar twit-followers-mode-map (make-sparse-keymap))
+(defvar twit-base-map
+  (let ((map (make-sparse-keymap))
+        (keys '(("f" . twit-list-followers)
+                ("t" . twit-post)
+                ("d" . twit-direct)
+                ("n" . twit-next-tweet)
+                ("p" . twit-previous-tweet)
+                ("r" . twit-post-reply)
+                ("q" . bury-buffer))))
+    (mapc (lambda (binding)
+            (define-key map (car binding) (cdr binding))) keys) map)
+  "Base map for twit-mode.")
+
+(defvar twit-status-mode-map
+  (let ((map (copy-keymap twit-base-map)))
+    (define-key map "g" 'twit-show-recent-tweets) map)
+  "Keymap for twit-status-mode")
+
+(defvar twit-followers-mode-map
+  (let ((map (copy-keymap twit-base-map)))
+    (define-key map "g" 'twit-list-followers) map)
+  "Keymap for twit-followers-mode")
+
+(defvar twit-timer
+  nil
+  "Timer object that handles polling the followers")
+
+(defvar twit-rate-limit-timer
+  nil
+  "Timer object to poll the rate-limiting.")
+
+(defvar twit-first-time-through nil)
+
+(defconst twit-base-search-url "http://search.twitter.com")
+(defconst twit-base-url "http://twitter.com")
+
+(defconst twit-update-url 
+  (concat twit-base-url "/statuses/update.xml"))
+(defconst twit-puplic-timeline-file
+  (concat twit-base-url "/statuses/public_timeline.xml"))
+(defconst twit-friend-timeline-file
+  (concat twit-base-url "/statuses/friends_timeline.xml?page=%s"))
+(defconst twit-followers-file
+  (concat twit-base-url "/statuses/followers.xml"))
+(defconst twit-friend-list-url
+  (concat twit-base-url "/statuses/friends.xml"))
+(defconst twit-mentions-url
+  (concat twit-base-url "/statuses/mentions.xml?page=%s"))
+
+(defconst twit-rate-limit-file
+  (concat twit-base-url "/account/rate_limit_status.xml"))
+
+(defconst twit-direct-msg-send-url
+  (concat twit-base-url "/direct_messages/new.xml"))
+(defconst twit-direct-msg-get-url
+  (concat twit-base-url "/direct_messages.xml"))
+
+(defconst twit-search-url
+  (concat twit-base-search-url "/search.atom?q=%s"))
+
+(defconst twit-post-success-msg 
+  "Post sent!")
+(defconst twit-direct-success-msg
+  "Direct Message sent!")
+
+(defconst twit-post-failed-msg "Your posting has failed.")
+
+(defconst twit-too-long-msg 
+  "Post not sent because length exceeds 140 characters")
+
+(defconst twit-standard-rate-limit 100)
+
+(defconst twit-rate-limit-offset 5
+  "Number of seconds to add to a throttled rate limit for insurance.")
+
+(defconst twit-rate-limit-interval (* 2 60 60)
+  "Every 2 Hours check for rate limiting.")
+
+(defconst twit-filter-at-tweets-retweet-regex "\\bRT[ :]*@"
+  "Retweets are tweets that do contain at messages that might be actually interesting.")
+
+(defconst twit-request-headers `(("X-Twitter-Client" . "twit.el")
+								 ("X-Twitter-Client-Version" . ,twit-version-number)
+								 ("X-Twitter-Client-URL" . "http://www.emacswiki.org/cgi-bin/emacs/twit.el")))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Cusomtization functions
@@ -459,96 +542,6 @@ search."
 	(t (:inverse)))
   "(_x___}<"
   :group 'twit)
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;; More variables and constants
-;; 'r' key for reloading/refreshing the buffer
-(defvar twit-key-list
-  '(("s" . twit-show-recent-tweets)
-    ("g" . twit-show-recent-tweets)
-	("f" . twit-list-followers)
-	("t" . twit-post)
-    ("d" . twit-direct)
-    ("n" . twit-next-tweet)
-    ("p" . twit-previous-tweet)
-    ("r" . twit-post-reply)
-	("h" . twit-mode-help)
-	("?" . twit-mode-help)))
-
-(define-key twit-status-mode-map "r" 'twit-show-recent-tweets)
-(define-key twit-followers-mode-map "r" 'twit-list-followers)
-
-
-(dolist (info twit-key-list)
-  (define-key twit-status-mode-map (car info) (cdr info))
-  (define-key twit-followers-mode-map (car info) (cdr info)))
-
-(defun twit-mode-help ()
-	(interactive)
-	(message "Help: %s" (append twit-key-list '(("r" . "Reload Current Page")))))
-
-(defvar twit-timer
-  nil
-  "Timer object that handles polling the followers")
-
-(defvar twit-rate-limit-timer
-  nil
-  "Timer object to poll the rate-limiting.")
-
-(defvar twit-first-time-through nil)
-
-
-(defconst twit-base-search-url "http://search.twitter.com")
-(defconst twit-base-url "http://twitter.com")
-
-(defconst twit-update-url 
-  (concat twit-base-url "/statuses/update.xml"))
-(defconst twit-puplic-timeline-file
-  (concat twit-base-url "/statuses/public_timeline.xml"))
-(defconst twit-friend-timeline-file
-  (concat twit-base-url "/statuses/friends_timeline.xml?page=%s"))
-(defconst twit-followers-file
-  (concat twit-base-url "/statuses/followers.xml"))
-(defconst twit-friend-list-url
-  (concat twit-base-url "/statuses/friends.xml"))
-(defconst twit-mentions-url
-  (concat twit-base-url "/statuses/mentions.xml?page=%s"))
-
-(defconst twit-rate-limit-file
-  (concat twit-base-url "/account/rate_limit_status.xml"))
-
-(defconst twit-direct-msg-send-url
-  (concat twit-base-url "/direct_messages/new.xml"))
-(defconst twit-direct-msg-get-url
-  (concat twit-base-url "/direct_messages.xml"))
-
-(defconst twit-search-url
-  (concat twit-base-search-url "/search.atom?q=%s"))
-
-(defconst twit-post-success-msg 
-  "Post sent!")
-(defconst twit-direct-success-msg
-  "Direct Message sent!")
-
-(defconst twit-post-failed-msg "Your posting has failed.")
-
-(defconst twit-too-long-msg 
-  "Post not sent because length exceeds 140 characters")
-
-(defconst twit-standard-rate-limit 100)
-
-(defconst twit-rate-limit-offset 5
-  "Number of seconds to add to a throttled rate limit for insurance.")
-
-(defconst twit-rate-limit-interval (* 2 60 60)
-  "Every 2 Hours check for rate limiting.")
-
-(defconst twit-filter-at-tweets-retweet-regex "\\bRT[ :]*@"
-  "Retweets are tweets that do contain at messages that might be actually interesting.")
-
-(defconst twit-request-headers `(("X-Twitter-Client" . "twit.el")
-								 ("X-Twitter-Client-Version" . ,twit-version-number)
-								 ("X-Twitter-Client-URL" . "http://www.emacswiki.org/cgi-bin/emacs/twit.el")))
 
 (defmacro with-twitter-buffer (buffer-name &rest forms)
   "Create a twitter buffer with name BUFFER-NAME, and execute FORMS."
@@ -1334,15 +1327,14 @@ With a numeric prefix argument, it will skip to that page like `twit-show-recent
 
 ;;* mode
 ;;;###autoload
-(define-minor-mode twit-mode 
-  "Toggle twit-mode, a minor mode that binds some keys for posting.
-Globally binds some keys to Twit's interactive functions.
+(define-minor-mode twit-minor-mode
+  "Toggle twit-minor-mode, a minor mode that binds some keys for
+posting.  Globally binds some keys to Twit's interactive functions.
 
-With no argument, this command toggles the mode. 
-Non-null prefix argument turns on the mode.
-Null prefix argument turns off the mode.
+With no argument, this command toggles the mode.  Non-null prefix
+argument turns on the mode.  Null prefix argument turns off the mode.
 
-\\{twit-mode-map}" nil
+\\{twit-minor-mode-map}" nil
 " Twit" 
 '(("\C-c\C-tp" . twit-post)
   ("\C-c\C-tr" . twit-post-region)
