@@ -884,7 +884,7 @@ It is in the format of (timestamp user-id message) ")
 		  (let ((o (make-overlay overlay-start overlay-end)))
 			(overlay-put o 'face (if (= 0 (% times-through 2))
 									 "twit-zebra-1-face"
-									 "twit-zebra-2-face"))))))
+									 "twit-zebra-2-face")))))
 
 ;;* search write
 (defun twit-write-search (atom-data)
