@@ -250,7 +250,7 @@
 ;;; Variables
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defvar twit-base-map
+(defvar twit-status-mode-map
   (let ((map (make-sparse-keymap))
         (keys '(("f" . twit-list-followers)
                 ("t" . twit-post)
@@ -258,19 +258,19 @@
                 ("n" . twit-next-tweet)
                 ("p" . twit-previous-tweet)
                 ("r" . twit-post-reply)
+                ("g" . twit-show-recent-tweets)
+                ("s" . twit-search)
                 ("q" . bury-buffer))))
     (mapc (lambda (binding)
             (define-key map (car binding) (cdr binding))) keys) map)
   "Base map for twit-mode.")
 
-(defvar twit-status-mode-map
-  (let ((map (copy-keymap twit-base-map)))
-    (define-key map "g" 'twit-show-recent-tweets) map)
-  "Keymap for twit-status-mode")
-
 (defvar twit-followers-mode-map
-  (let ((map (copy-keymap twit-base-map)))
-    (define-key map "g" 'twit-list-followers) map)
+  (let ((map (copy-keymap twit-status-mode-map)))
+    (define-key map "g" 'twit-list-followers)
+    (define-key map "n" 'next-line)
+    (define-key map "p" 'previous-line)
+    map)
   "Keymap for twit-followers-mode")
 
 (defvar twit-timer
@@ -793,7 +793,9 @@ It is in the format of (timestamp user-id message) ")
 		(car (xml-node-children (xml-first-child node addr)))))
 
 (defun twit-next-tweet (&optional arg)
-  "Move forward to the next tweet"
+  "Move forward to the next tweet.
+
+With argument ARG, move to the ARGth next tweet."
   (interactive "p")
   (mapc (lambda (n)
           (goto-char (next-single-property-change (point) 'tweet-id nil
@@ -801,7 +803,9 @@ It is in the format of (timestamp user-id message) ")
         (number-sequence 1 (or arg 1))))
 
 (defun twit-previous-tweet (&optional arg)
-  "Move backward to the previous tweet"
+  "Move backward to the previous tweet.
+
+With argument ARG, move to the ARGth previous tweet."
   (interactive "p")
   (mapc (lambda (n)
           (goto-char (previous-single-property-change (point) 'tweet-id nil
@@ -1188,18 +1192,31 @@ long."
   "Display a list of all your twitter.com followers' names."
   (interactive)
   (pop-to-buffer "*Twit-followers*")
-  (kill-region (point-min) (point-max))
-  (loop for name in 
-        (loop for name in
-              (loop for user in 
-                    (xml-get-children
-                     (cadr (twit-parse-xml twit-followers-file "GET")) 'user)
-                    collect (sixth user))
-              collect (third name))
-        do (insert (concat name "\n")))
+  (let ((buffer-read-only nil))
+    (kill-region (point-min) (point-max))
+
+    (save-excursion
+      (mapc (lambda (user)
+              (let* ((user (cdr user))
+                     (user-name (nth 2 (assoc 'name user)))
+                     (user-id (nth 2 (assoc 'screen_name user))))
+                (let ((start (point)))
+                  (twit-insert-with-overlay-attributes
+                   (concat user-id
+                           (if user-name
+                               (concat " (" user-name ")")
+                             "") "\n")
+                   '((face . "twit-author-face")))
+                  (set-text-properties start (point)
+                                       (list 'user-id user-id)))))
+
+            (xml-get-children (cadr (twit-parse-xml twit-followers-file "GET"))
+                              'user))))
   ;; set up mode as with twit-show-recent-tweets
   (text-mode)
-  (use-local-map twit-followers-mode-map))
+  (use-local-map twit-followers-mode-map)
+  (set-buffer-modified-p nil)
+  (setq buffer-read-only t))
 
 ;;; Helper function to insert text into buffer, add an overlay and
 ;;; apply the supplied attributes to the overlay
