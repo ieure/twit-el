@@ -856,26 +856,24 @@ It is in the format of (timestamp user-id message) ")
 				(insert " ")
 				(insert-image user-img)
 				(insert " "))
-					  
-		  (twit-insert-with-overlay-attributes (format "%25s" 
-													   (concat user-id
-															   (if user-name
-																   (concat " (" user-name ")")
-																   "")))
-											   '((face . "twit-author-face")))
-		  (insert ": ")
-		  (twit-insert-with-overlay-attributes message
-											   '((face . "twit-message-face")))
+
+          (twit-insert-with-overlay-attributes
+           (concat user-id
+                   (if user-name
+                       (concat " (" user-name ")")
+                     "") "\n")
+           '((face . "twit-author-face"))))
+
+          (twit-insert-with-overlay-attributes message '((face . "twit-message-face")) "    ")
 		  (insert "\n")
-					  
+
 		  (when (or timestamp location src-info)
-				(twit-insert-with-overlay-attributes
-				 (concat "                          "
-						 (when timestamp (concat " posted " timestamp))
-						 (when location (concat " from " location))
-						 (when src-info (concat " (via " src-info ")"))
-						 "\n")
-				 '((face . "twit-info-face"))))
+            (twit-insert-with-overlay-attributes
+             (concat (when timestamp (concat " posted " timestamp))
+                     (when location (concat " from " location))
+                     (when src-info (concat " (via " src-info ")"))
+                     "\n")
+             '((face . "twit-info-face")) "" 'right))
 		  (setq overlay-end (point))
 		  (let ((o (make-overlay overlay-start overlay-end)))
 			(overlay-put o 'face (if (= 0 (% times-through 2))
@@ -1167,13 +1165,14 @@ long."
 ;;; Helper function to insert text into buffer, add an overlay and
 ;;; apply the supplied attributes to the overlay
 ;;* helper write
-(defun twit-insert-with-overlay-attributes (text attributes)
-  (let ((start (point)))
-    (insert text)
+(defun twit-insert-with-overlay-attributes (text attributes &optional prefix justify)
+  (let ((start (point))
+        (fill-prefix (or prefix fill-prefix)))
+    (insert (concat fill-prefix text))
     (let ((overlay (make-overlay start (point))))
       (dolist (spec attributes)
-        (overlay-put overlay (car spec) (cdr spec))))))
-
+        (overlay-put overlay (car spec) (cdr spec))))
+    (fill-region start (point) justify)))
 
 ;;* twit follow timer interactive
 ;;;###autoload
