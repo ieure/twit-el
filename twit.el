@@ -468,6 +468,8 @@ search."
 	("f" . twit-list-followers)
 	("p" . twit-post)
     ("d" . twit-direct)
+    ("n" . next-line)
+    ("p" . previous-line)
 	("h" . twit-mode-help)
 	("?" . twit-mode-help)))
 
