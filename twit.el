@@ -465,8 +465,9 @@ search."
 ;; 'r' key for reloading/refreshing the buffer
 (defvar twit-key-list
   '(("s" . twit-show-recent-tweets)
+    ("g" . twit-show-recent-tweets)
 	("f" . twit-list-followers)
-	("p" . twit-post)
+	("t" . twit-post)
     ("d" . twit-direct)
     ("n" . twit-next-tweet)
     ("p" . twit-previous-tweet)
@@ -795,14 +796,16 @@ It is in the format of (timestamp user-id message) ")
   "Move forward to the next tweet"
   (interactive "p")
   (mapc (lambda (n)
-          (goto-char (next-single-property-change (point) 'tweet-id)))
+          (goto-char (next-single-property-change (point) 'tweet-id nil
+                                                  (point-max))))
         (number-sequence 1 (or arg 1))))
 
 (defun twit-previous-tweet (&optional arg)
   "Move backward to the previous tweet"
   (interactive "p")
   (mapc (lambda (n)
-          (goto-char (previous-single-property-change (point) 'tweet-id)))
+          (goto-char (previous-single-property-change (point) 'tweet-id nil
+                                                      (point-min))))
         (number-sequence 1 (or arg 1))))
 
 ;;; xml parsing is a little hacky and needs work.
@@ -1138,7 +1141,29 @@ specific author that hte cursor is nearest to.
                                       (concat "@" reply-to " ")))))
     (if (> (length post) 140)
 		(error twit-too-long-msg)
-		(twit-post-function twit-update-url post))))
+      (twit-post-function twit-update-url post))))
+
+(defun twit-post-reply (prefix)
+  "Reply to a status on twitter.com.
+Prompt the first time for password and username \(unless
+`twit-user' and/or `twit-pass' is set\) and for the text of the
+post; thereafter just for post text.  Posts must be <= 140 chars
+long.
+
+A prefix argument will prompt you for your post in reply to a
+specific author that hte cursor is nearest to.
+"
+  (interactive "P")
+  (let* ((reply-to (when prefix 
+                     (twit-grab-author-of-tweet)))
+         (post (twit-query-for-post (if reply-to
+                                        (concat "Reply to " reply-to)
+                                      "Post") 
+                                    (when reply-to
+                                      (concat "@" reply-to " ")))))
+    (if (> (length post) 140)
+		(error twit-too-long-msg)
+      (twit-post-function twit-update-url post))))
 
 ;;* post interactive
 ;;;###autoload
