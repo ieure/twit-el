@@ -580,7 +580,8 @@ Emacs' url package will prompt for authentication info if required.
 Note that this parses the entire HTTP request as an xml fragment
 and not the response.  THIS BEHAVIOR IS SUBJECT TO CHANGE!"
   (let ((result nil)
-		(url-request-method method))
+		(url-request-method method)
+        (url-show-status nil))
     (save-window-excursion
       (set-buffer (url-retrieve-synchronously url))
       (goto-char (point-min))
@@ -669,7 +670,8 @@ pain where uesrs can't see why they have blank timelines."
   "Retrieve the resource at URL, and when retrieved call callback
 This is the asyncronous version of twit-parse-xml.  Once that function is
 refactored, and its named changed, so should this one."
-  (let ((url-request-method "GET"))
+  (let ((url-request-method "GET")
+        (url-show-status nil))
 	(setq twit-async-buffer (url-retrieve url 'twit-parse-xml-async-retrieve (list url callback)))))
 
 ;;* rate-limit var
@@ -710,6 +712,7 @@ This will give us a Guarantee that our posting atually did work."
 ;;* post status
 (defun twit-post-function (url post)
   (let ((url-request-method "POST")
+        (url-show-status nil)
 	(url-request-data (concat "source=twit.el&status=" (url-hexify-string post)))
         ;; these headers don't actually do anything (yet?) -- the 
         ;; source parameter above is what counts
@@ -720,6 +723,7 @@ This will give us a Guarantee that our posting atually did work."
 ;;* post direct 
 (defun twit-direct-message (user msg)
   (let ((url-request-method "POST")
+        (url-show-status nil)
 		(url-request-data (concat "source=twit.el"
 								  "&user=" (url-hexify-string user)
 								  "&text=" (url-hexify-string msg)))
@@ -905,7 +909,8 @@ It is in the format of (timestamp user-id message) ")
 ; This should check to see if the url is stored locally, and if so, don't retrieve
 (defun twit-get-user-image (url user-id)
   "Retrieve the user image from the list, or from the URL"
-  (let ((img (assoc url twit-user-image-list)))
+  (let ((img (assoc url twit-user-image-list))
+        (url-show-status nil))
 	(if (and img (not (bufferp (cdr img))))
 		(cdr (assoc url twit-user-image-list))
 		(if (file-exists-p (concat twit-user-image-dir "/" user-id "-" (file-name-nondirectory url)))
