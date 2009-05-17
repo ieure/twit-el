@@ -281,8 +281,6 @@
   nil
   "Timer object to poll the rate-limiting.")
 
-(defvar twit-first-time-through nil)
-
 (defconst twit-base-search-url "http://search.twitter.com")
 (defconst twit-base-url "http://twitter.com")
 
