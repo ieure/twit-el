@@ -814,32 +814,42 @@ With argument ARG, move to the ARGth previous tweet."
 
 ;;; xml parsing is a little hacky and needs work.
 ;;* tweets write memoryleak last-tweet
-(defun twit-write-recent-tweets (xml-data) 
+(defun twit-write-recent-tweets (xml-data)
   (buffer-disable-undo)
-  (delete-region (point-min) (point-max))
-  (twit-insert-with-overlay-attributes (format-time-string "Last updated: %c\n")
-									   '((face . "twit-title-face")))
-  (if (twit-header-error-p (twit-parse-header (car xml-data)))
-	  (twit-display-error xml-data)
-	  (let* ((first-tweet (xml-first-child (cadr xml-data) 'status))
-			 (most-recent-tweet (list (xml-first-childs-value first-tweet 'created_at)
-									  (or (xml-first-childs-value (xml-first-child first-tweet 'user) 'screen_name) "??")
-									  (xml-substitute-special (xml-first-childs-value first-tweet 'text))))
-			 (times-through 1))
-		(dolist (status-node (xml-get-children (cadr xml-data) 'status))
-				(twit-write-tweet status-node nil times-through)
-				(setq times-through (+ 1 times-through)))
-	
-		(when (not (equal most-recent-tweet twit-last-tweet))
-			  (setq twit-last-tweet most-recent-tweet)
-			  (run-hooks 'twit-new-tweet-hook))))
-  
-  ;; go back to top so we see the latest messages
-  (goto-address)
-  (goto-char (point-min))
+  (save-excursion
+    (save-restriction
+      (widen)
 
-  ;; this needs more TLC
-  (if twit-debug-mem (message (garbage-collect))))
+      ;; Update the header
+      (goto-char (point-min))
+      (let ((empty (and (bobp) (eobp))))
+        (unless empty (kill-line))
+        (twit-insert-with-overlay-attributes
+         (format-time-string "Last updated: %c")
+         (when empty '((face . "twit-title-face"))))
+        (when empty (insert "\n")))
+
+      (if (twit-header-error-p (twit-parse-header (car xml-data)))
+          (twit-display-error xml-data)
+        (let* ((first-tweet (xml-first-child (cadr xml-data) 'status))
+               (most-recent-tweet (list (xml-first-childs-value first-tweet 'created_at)
+                                        (or (xml-first-childs-value (xml-first-child first-tweet 'user) 'screen_name) "??")
+                                        (xml-substitute-special (xml-first-childs-value first-tweet 'text))))
+               (times-through 1))
+          (dolist (status-node (xml-get-children (cadr xml-data) 'status))
+            (twit-write-tweet status-node nil times-through)
+            (setq times-through (+ 1 times-through)))
+          
+          (when (not (equal most-recent-tweet twit-last-tweet))
+            (setq twit-last-tweet most-recent-tweet)
+            (run-hooks 'twit-new-tweet-hook))))
+      
+      ;; go back to top so we see the latest messages
+      (goto-address)
+      ;; (goto-char (point-min))
+
+      ;; this needs more TLC
+      (if twit-debug-mem (message (garbage-collect))))))
 
 ;;* tweet direct write image
 (defun twit-write-tweet (tweet &optional filter-tweets times-through)
@@ -972,7 +982,9 @@ With argument ARG, move to the ARGth previous tweet."
 ;;* recent timer 
 (defun twit-follow-recent-tweets-timer-function ()
   "Timer function for recent tweets, called via a timer"
-  (twit-parse-xml-async (format twit-friend-timeline-file 1) 'twit-follow-recent-tweets-async-callback))
+  (twit-parse-xml-async (concat (format twit-friend-timeline-file 1)
+                                (unless (eq nil twit-last-tweet)))
+                        'twit-follow-recent-tweets-async-callback))
 
 ;;* recent async 
 (defun twit-follow-recent-tweets-async-callback (status url xml)
@@ -1249,7 +1261,8 @@ You can change the time between each check by customizing `tiwt-follow-idle-inte
   (if (featurep 'todochiku)
 	  (todochiku-message "Twit.el" "Twit.el Stopped Following Tweets" (todochiku-icon 'social)))
   (cancel-timer twit-timer)
-  (cancel-timer twit-rate-limit-timer))
+  (cancel-timer twit-rate-limit-timer)
+  (setq twit-last-tweet nil))
 
 ;;* tweet show refactorme interactive memoryleak
 ;; minor modes might be a cause of the memoryleak, see about removing them
