@@ -289,13 +289,23 @@
 (defconst twit-puplic-timeline-file
   (concat twit-base-url "/statuses/public_timeline.xml"))
 (defconst twit-friend-timeline-file
-  (concat twit-base-url "/statuses/friends_timeline.xml?page=%s"))
+  (concat twit-base-url "/statuses/friends_timeline.xml?page=%d"))
+(defconst twit-user-timeline-file
+  (concat twit-base-url "/statuses/user_timeline/%s.xml?page=%d"))
 (defconst twit-followers-file
   (concat twit-base-url "/statuses/followers.xml"))
 (defconst twit-friend-list-url
   (concat twit-base-url "/statuses/friends.xml"))
 (defconst twit-mentions-url
   (concat twit-base-url "/statuses/mentions.xml?page=%s"))
+
+(defconst twit-hashtag-regexp
+  "#[a-zA-Z0-9]+"
+  "The regular expression used to match hashtags.")
+
+(defconst twit-mention-regexp
+  "@\\([a-zA-Z0-9_]+\\)"
+  "The regular expression used to match usernames.")
 
 (defconst twit-rate-limit-file
   (concat twit-base-url "/account/rate_limit_status.xml"))
@@ -1230,10 +1240,35 @@ long."
   (set-buffer-modified-p nil)
   (setq buffer-read-only t))
 
+(defun twit-show-user-timeline (user &optional page)
+  "Show the public timeline of a user."
+  (interactive "MUser: \nP")
+  (let ((page (twit-check-page-prefix page))
+        (b (get-buffer-create (format "*Twit-user-%s*" user))))
+    (display-buffer b)
+    (with-current-buffer b
+      (toggle-read-only 0)
+      (twit-write-recent-tweets
+       (twit-parse-xml (format twit-user-timeline-file user page) "GET"))
+      (text-mode)
+      (toggle-read-only 1)
+	  (use-local-map twit-status-mode-map))))
+
 ;;; Helper function to insert text into buffer, add an overlay and
 ;;; apply the supplied attributes to the overlay
 ;;* helper write
 (defun twit-insert (text attributes &optional prefix justify)
+  "Insert TEXT into a Twit buffer.
+
+The inserted text will be wrappedd with `fill-region'.
+
+An overlay containing ATTRIBUTES will be created around TEXT.
+
+If specified, PREFIX will be added to the beginning of the text,
+and used as the `fill-prefix'.
+
+JUSTIFY is passed to `fill-region', and may be used to left-, center-,
+or right-align the text."
   (let ((start (point))
         (fill-prefix (or prefix fill-prefix)))
     (insert (concat fill-prefix text))
@@ -1246,20 +1281,33 @@ long."
     (save-excursion
       (let ((end (point)))
       (goto-char start)
-      (while (re-search-forward "#\\([^\s]+\\)" end t)
+      (while (re-search-forward twit-hashtag-regexp end t)
         (make-button (match-beginning 0) (match-end 0)
                      'searchtext (substring-no-properties (match-string 0))
                      'action (lambda (button)
                                 (twit-search (button-get button 'searchtext)))
-                     :type 'twit-hashtag-button))))))
+                     :type 'twit-hashtag-button))
+
+      ;; Usernames
+      (goto-char start)
+      (while (re-search-forward twit-mention-regexp end t)
+        (make-button (match-beginning 0) (match-end 0)
+                     'user (substring-no-properties (match-string 1))
+                     'action (lambda (button)
+                               (twit-show-user-timeline
+                                (button-get button 'user)))
+                     :type 'twit-user-button))))))
 
 (defun twit-insert-user (username &optional realname)
+  "Insert a user (author) into a Twit buffer."
   (let ((beg (point)))
     (twit-insert (concat username (when realname (format " (%s)" realname))) nil)
-    ;; (make-button beg (point) 'username username
-    ;;              'action 'twit-show-friend-timeline
-    ;;              :type 'twit-user-button)
-    ))
+    (make-button beg (point) 'username username
+                 'user username
+                 'action (lambda (button)
+                           (twit-show-user-timeline
+                            (button-get button 'user)))
+                 :type 'twit-user-button)))
 
 ;;* twit follow timer interactive
 ;;;###autoload
