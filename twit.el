@@ -333,6 +333,11 @@
 								 ("X-Twitter-Client-Version" . ,twit-version-number)
 								 ("X-Twitter-Client-URL" . "http://www.emacswiki.org/cgi-bin/emacs/twit.el")))
 
+(define-button-type 'twit-user-button
+  'face 'twit-author-face)
+
+(define-button-type 'twit-hashtag-button
+  'face 'link)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;; Cusomtization functions
@@ -774,9 +779,12 @@ XML should not have any HTTP header information in its car."
 (defvar twit-last-tweet '()
   "The last tweet that was posted.
 This is a bit of an ugly hack to store the last tweet that was shown through twit-write-recent-tweets.
-It is in the format of (timestamp user-id message) ")
 
-(setq twit-last-tweet '())
+It's an associative list in the format:
+ ((ID        . TWEET-ID)
+ (CREATED_AT . TIMESTAMP)
+ (USER       . POSTING-USER)
+ (TEXT       . MESSAGE-TEXT))")
 
 ;;* xmlparse
 (when (not (functionp 'xml-first-child))
@@ -821,13 +829,18 @@ With argument ARG, move to the ARGth previous tweet."
   (if (twit-header-error-p (twit-parse-header (car xml-data)))
 	  (twit-display-error xml-data)
 	  (let* ((first-tweet (xml-first-child (cadr xml-data) 'status))
-			 (most-recent-tweet (list (xml-first-childs-value first-tweet 'created_at)
-									  (or (xml-first-childs-value (xml-first-child first-tweet 'user) 'screen_name) "??")
-									  (xml-substitute-special (xml-first-childs-value first-tweet 'text))))
+			 (most-recent-tweet
+              `((id . ,(string-to-int (xml-first-childs-value first-tweet 'id)))
+                (created_at . ,(xml-first-childs-value first-tweet 'created_at))
+                (user ,(or (xml-first-childs-value
+                            (xml-first-child first-tweet 'user)
+                            'screen_name) "??"))
+                (text ,(xml-substitute-special 
+                        (xml-first-childs-value first-tweet 'text)))))
 			 (times-through 1))
+
 		(dolist (status-node (xml-get-children (cadr xml-data) 'status))
-				(twit-write-tweet status-node nil times-through)
-				(setq times-through (+ 1 times-through)))
+				(twit-write-tweet status-node nil (incf times-through)))
 	
 		(when (not (equal most-recent-tweet twit-last-tweet))
 			  (setq twit-last-tweet most-recent-tweet)
@@ -880,16 +893,12 @@ With argument ARG, move to the ARGth previous tweet."
 		  (setq overlay-start (point))
 
 		  (when (and twit-show-user-images user-img)
-				(insert " ")
-				(insert-image user-img)
-				(insert " "))
+            (insert " ")
+            (insert-image user-img)
+            (insert " "))
 
-          (twit-insert
-           (concat user-id
-                   (if user-name
-                       (concat " (" user-name ")")
-                     "") "\n")
-           '((face . "twit-author-face"))))
+          (twit-insert-user user-id user-name)
+          (insert "\n"))
 
           (twit-insert message '((face . "twit-message-face")) "    ")
 		  (insert "\n")
@@ -1056,7 +1065,11 @@ With argument ARG, move to the ARGth previous tweet."
 
 ;;; funciton to integrade with growl.el or todochiku.el
 (defun twit-todochiku ()
-  (todochiku-message "twit.el" (format "From %s:\n%s" (cadr twit-last-tweet) (caddr twit-last-tweet)) (todochiku-icon 'social)))
+  (todochiku-message "twit.el"
+                     (format "From %s:\n%s"
+                             (cdr (assq 'user twit-last-tweet))
+                             (cdr (assq 'text twit-last-tweet)))
+                     (todochiku-icon 'social)))
 
 (defun twit-grab-author-of-tweet ()
   (let* ((find-overlays-specifying (lambda (prop)
@@ -1227,7 +1240,26 @@ long."
     (let ((overlay (make-overlay start (point))))
       (dolist (spec attributes)
         (overlay-put overlay (car spec) (cdr spec))))
-    (fill-region start (point) justify)))
+    (fill-region start (point) justify)
+
+    ;; Buttonize
+    (save-excursion
+      (let ((end (point)))
+      (goto-char start)
+      (while (re-search-forward "#\\([^\s]+\\)" end t)
+        (make-button (match-beginning 0) (match-end 0)
+                     'searchtext (substring-no-properties (match-string 0))
+                     'action (lambda (button)
+                                (twit-search (button-get button 'searchtext)))
+                     :type 'twit-hashtag-button))))))
+
+(defun twit-insert-user (username &optional realname)
+  (let ((beg (point)))
+    (twit-insert (concat username (when realname (format " (%s)" realname))) nil)
+    ;; (make-button beg (point) 'username username
+    ;;              'action 'twit-show-friend-timeline
+    ;;              :type 'twit-user-button)
+    ))
 
 ;;* twit follow timer interactive
 ;;;###autoload
