@@ -643,10 +643,10 @@ pain where uesrs can't see why they have blank timelines."
   "Given an xml fragment that contains an error, lets display that to the user."
   (let ((header (twit-parse-header (car xml))))
 	(when (twit-header-error-p header)	   
-	   (twit-insert-with-overlay-attributes
+	   (twit-insert
 		 "(_x___}<"
 		 '((face "twit-fail-whale-face")))
-	   (twit-insert-with-overlay-attributes
+	   (twit-insert
 		  (concat "         HTTP ERROR!  "
 				  "(" (cadr header) ") "
 				  (caddr header) "\n\n"
@@ -815,7 +815,7 @@ With argument ARG, move to the ARGth previous tweet."
 (defun twit-write-recent-tweets (xml-data) 
   (buffer-disable-undo)
   (delete-region (point-min) (point-max))
-  (twit-insert-with-overlay-attributes (format-time-string "Last updated: %c\n")
+  (twit-insert (format-time-string "Last updated: %c\n")
 									   '((face . "twit-title-face")))
   (if (twit-header-error-p (twit-parse-header (car xml-data)))
 	  (twit-display-error xml-data)
@@ -883,18 +883,18 @@ With argument ARG, move to the ARGth previous tweet."
 				(insert-image user-img)
 				(insert " "))
 
-          (twit-insert-with-overlay-attributes
+          (twit-insert
            (concat user-id
                    (if user-name
                        (concat " (" user-name ")")
                      "") "\n")
            '((face . "twit-author-face"))))
 
-          (twit-insert-with-overlay-attributes message '((face . "twit-message-face")) "    ")
+          (twit-insert message '((face . "twit-message-face")) "    ")
 		  (insert "\n")
 
 		  (when (or timestamp location src-info)
-            (twit-insert-with-overlay-attributes
+            (twit-insert
              (concat (when timestamp (concat " posted " timestamp))
                      (when location (concat " from " location))
                      (when src-info (concat " (via " src-info ")"))
@@ -915,7 +915,7 @@ With argument ARG, move to the ARGth previous tweet."
   (buffer-disable-undo)
   (delete-region (point-min) (point-max))
   (twit-display-error atom-data)
-  (twit-insert-with-overlay-attributes (format "Search: %s \n" (xml-first-childs-value (cadr atom-data) 'title))
+  (twit-insert (format "Search: %s \n" (xml-first-childs-value (cadr atom-data) 'title))
 									   '((face . "twit-title-face")))
   (dolist (entry-node (xml-get-children (cadr atom-data) 'entry))
 	 (let* ((message (xml-first-childs-value entry-node 'title))
@@ -1199,7 +1199,7 @@ long."
                      (user-name (nth 2 (assoc 'name user)))
                      (user-id (nth 2 (assoc 'screen_name user))))
                 (let ((start (point)))
-                  (twit-insert-with-overlay-attributes
+                  (twit-insert
                    (concat user-id
                            (if user-name
                                (concat " (" user-name ")")
@@ -1219,7 +1219,7 @@ long."
 ;;; Helper function to insert text into buffer, add an overlay and
 ;;; apply the supplied attributes to the overlay
 ;;* helper write
-(defun twit-insert-with-overlay-attributes (text attributes &optional prefix justify)
+(defun twit-insert (text attributes &optional prefix justify)
   (let ((start (point))
         (fill-prefix (or prefix fill-prefix)))
     (insert (concat fill-prefix text))
@@ -1310,7 +1310,7 @@ With a numeric prefix argument, it will skip to that page like `twit-show-recent
 	    (toggle-read-only 0)
 		(buffer-disable-undo)
 		(delete-region (point-min) (point-max))
-		(twit-insert-with-overlay-attributes (format-time-string "Direct messages: %c\n") '((face . "twit-title-face")))
+		(twit-insert (format-time-string "Direct messages: %c\n") '((face . "twit-title-face")))
 
 		(let ((times-through 0))
 		  (dolist (msg-node (xml-get-children (cadr (twit-parse-xml (format twit-direct-msg-get-url page) "GET")) 'direct_message))
@@ -1330,7 +1330,7 @@ With a numeric prefix argument, it will skip to that page like `twit-show-recent
   (interactive "P")
   (setq page (twit-check-page-prefix page))
   (with-twitter-buffer (concat "*Twit-at-" twit-user "*")
-    (twit-insert-with-overlay-attributes (format-time-string (concat "Twit @" twit-user ": %c\n"))
+    (twit-insert (format-time-string (concat "Twit @" twit-user ": %c\n"))
 										 '((face . "twit-title-face")))
 	(let ((times-through 0))
 	  (dolist (status-node (xml-get-children (cadr (twit-parse-xml (format twit-mentions-url page) "GET")) 'status))
