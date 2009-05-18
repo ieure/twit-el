@@ -815,6 +815,7 @@ With argument ARG, move to the ARGth previous tweet."
 (defun twit-write-recent-tweets (xml-data) 
   (buffer-disable-undo)
   (delete-region (point-min) (point-max))
+  (remove-overlays)
   (twit-insert (format-time-string "Last updated: %c\n")
 									   '((face . "twit-title-face")))
   (if (twit-header-error-p (twit-parse-header (car xml-data)))
