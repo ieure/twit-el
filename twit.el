@@ -1,5 +1,5 @@
 ;;; Twit.el --- interface with twitter.com
-(defvar twit-version-number "0.3.2")
+(defvar twit-version-number "0.3.3")
 ;; Copyright (c) 2007 Theron Tlax
 ;;           (c) 2008-2009 Jonathan Arkell
 ;; Time-stamp: <2007-03-19 18:33:17 thorne>
@@ -275,7 +275,10 @@
 ;;            - friends list has twit-user set.
 ;;            - renamed twit-mode to twit-minor-mode
 ;;          - removed extraneous keymaps
-;;
+;; - 0.3.3  - Auto-install function added.  When you are over text
+;;            that matches the name of an elisp file, you can press
+;;            "i" to install that file from emacs wiki, provided you
+;;            have auto-install.
 
 ;;; Bugs:
 ;; * zebra tables are hosed with filtering
@@ -617,8 +620,10 @@ AS WELL.  Otherwise your primary login credentials may get wacked."
 	("k" . twit-remove-friend)
 
 	("s" . twit-search)
-	("v" . twit-visit-link)
 
+	("v" . twit-visit-link)
+    ("i" . twit-install-elisp)
+	
 	("q" . burry-buffer)
 
 	("h" . twit-mode-help)
@@ -652,7 +657,8 @@ AS WELL.  Otherwise your primary login credentials may get wacked."
 
 ;;* const url
 (defconst twit-base-search-url "http://search.twitter.com")
-(defconst twit-base-url "https://twitter.com")
+(defconst twit-base-url "http://twitter.com")
+(defconst twit-secure-base-url "https://twitter.com")
 
 (defconst twit-update-url
   (concat twit-base-url "/statuses/update.xml"))
@@ -745,6 +751,9 @@ AS WELL.  Otherwise your primary login credentials may get wacked."
 
 (defconst twit-url-regex "\\(http://[a-zA-Z0-9.]+\.[a-zA-Z0-9%#;~/.=+&$,?@-]+\\)"
    "Regular expression for urls.")
+
+(defconst twit-emacs-lisp-regex "\\([a-zA-Z0-9-.]+\\)\\.el"
+  "Regex for emacs lisp files.")
 
 ;; regex testing:
 ;; @_miaux #twit.el #foo @foo @foo-bar
@@ -1286,6 +1295,14 @@ TITLE is the title to display, and it is formatted with ARGS."
 									   'twit-url str
 									   'keymap map)))
 					   message)))
+  (when (string-match twit-emacs-lisp-regex message)
+		(setq message (replace-regexp-in-string 
+					   twit-emacs-lisp-regex
+					   (lambda (str)
+						 (propertize str
+									 'face 'twit-url-face
+									 'elisp str))
+					   message)))
   message)
 
 
@@ -1762,7 +1779,7 @@ Patch version from Ben Atkin."
 With argument ARG, move to the ARGth next tweet."
   (interactive "p")
   (mapc (lambda (n)
-          (goto-char (next-single-property-change (point) 'tweet-id nil
+          (goto-char (next-single-char-property-change (point) 'twit-id nil
                                                   (point-max))))
         (number-sequence 1 (or arg 1))))
 
@@ -1773,7 +1790,7 @@ With argument ARG, move to the ARGth next tweet."
 With argument ARG, move to the ARGth previous tweet."
   (interactive "p")
   (mapc (lambda (n)
-          (goto-char (previous-single-property-change (point) 'tweet-id nil
+          (goto-char (previous-single-char-property-change (point) 'twit-id nil
                                                       (point-min))))
         (number-sequence 1 (or arg 1))))
 
@@ -1859,6 +1876,19 @@ Otherwise goto the authors page."
   (browse-url (or (twit-get-text-property 'twit-url)
 	   		      (when (twit-get-text-property 'twit-user) (concat "http://twitter.com/" (twit-get-text-property 'twit-user))))))
 
+(defun twit-install-elisp ()
+  "Install the elisp library at point.
+
+This function assumes that the elisp library is at Emacs Wiki, and that you
+have auto-install installed."
+  (interactive)
+  (if (featurep 'auto-install)
+	  (let ((file  (twit-get-text-property 'elisp)))
+		(if file
+			(auto-install-from-emacswiki file)
+			(error "Not on an elisp library, cannot auto-install.")))
+	  (error "Cannot auto-install elisp library, because auto-install is not installed.")))
+
 ;;* multi-account interactive
 (defun twit-switch-account (account)
    "Switch twitter account to ACCOUNT.
@@ -1916,20 +1946,12 @@ Null prefix argument turns off the mode.
 
 ;;* posting
 (when nil
-	  (let* ((summary " - 3.0    - Renamed with-twitter-/foo/ to with-twit-/foo/ for better
-            consistancy, and less chances to collide with twitter.el.
-          - fixed bug caused by refactoring with twit-direct
-          - updated url regex.
-          - Added timezone patch from remvee (this patch somehow
-            got lost somewhere but is FINALLY applied)
-          - added multi-account functions:
-             - `twit-direct-with-account'
-             - `twit-post-with-account'
-             - `twit-show-direct-tweets-with-account'
-             - `twit-show-at-tweets-with-account'
-          - ran through checkdoc")
-			 (short-summary "Better Multi-account handing, timezone fix, bugfixes.")
-			 (twit-post (concat "New #twit.el: http://www.emacswiki.org/emacs-en/twit.el. " short-summary)))
+	  (let* ((summary " - 0.3.3  - Auto-install function added.  When you are over text 
+            that matches the name of an elisp file, you can press 
+            \"i\" to install that file from emacs wiki, provided you 
+            have auto-install.		")
+			 (short-summary "Auto-install magick. Press i on an emacs library in a tweet to install it.")
+			 (twit-post (format "New #twit.el: http://www.emacswiki.org/emacs-en/twit.el . V %s %s" twit-version-number short-summary)))
 		(yaoddmuse-post-library "twit.el" "EmacsWiki" "twit.el" summary t)
 		(twit-post-status twit-update-url twit-post)
 		(with-twit-auth "twit_el" twit-pass (twit-post-status twit-update-url twit-post))
